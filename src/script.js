@@ -4,6 +4,7 @@ import Stats from 'three/examples/jsm/libs/stats.module'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import textObject from '../assets/gltf/test2.gltf';
 import textObjectData from '../assets/gltf/test2_data.bin';
+import { GUI } from 'dat.gui'
 
 export default class ThreeJsDraft {
   constructor() {
@@ -153,7 +154,15 @@ export default class ThreeJsDraft {
         uDragTarget: { value: new THREE.Vector3() },
         uDragRelease: { value: 0 },
         uDragReleaseTime: { value: 0 },
-        uTime: { value: 0 }
+        uTime: { value: 0 },
+        uInfluence: { value: 0.3 },
+        uReleaseAmplitude: { value: 0.5 },
+        uReleaseDistortion: { value: 30 },
+        uZDistanceFactor: { value: 0.5 },
+        uReleaseDistortionFactor: { value: 1 },
+        uReleaseExpFactor: { value: -3 },
+        uDistortionFactor: { value: 0.5 },
+        uDistortionExpFactor: { value: -2.2 },
       },
       vertexShader: `
       uniform vec3 uDragStart;
@@ -161,19 +170,27 @@ export default class ThreeJsDraft {
       uniform float uDragRelease;
       uniform float uDragReleaseTime;
       uniform float uTime;
+      uniform float uInfluence;
+      uniform float uReleaseAmplitude;
+      uniform float uReleaseDistortion;
+      uniform float uZDistanceFactor;
+      uniform float uReleaseDistortionFactor;
+      uniform float uReleaseExpFactor;
+      uniform float uDistortionFactor;
+      uniform float uDistortionExpFactor;
 
       varying float vDistortion;
       
       void main() {
           float startToTarget = distance(uDragTarget, uDragStart);
           float distanceToStart = distance(position, uDragStart);
-          float influence = distanceToStart / (0. + 0.3 * startToTarget);
-          float distortion = exp(influence * -3.2);
+          float influence = distanceToStart / (uInfluence * startToTarget);
+          float distortion = uDistortionFactor * exp(influence * uDistortionExpFactor);
 
           if (uDragRelease > 0.) {
             float timeSinceRelease = uTime - uDragReleaseTime;
-            distortion *= exp(-3. * timeSinceRelease);
-            distortion *= 0.5 * sin(timeSinceRelease * 30.);
+            distortion *= uReleaseDistortionFactor * exp(uReleaseExpFactor * timeSinceRelease);
+            distortion *= uReleaseAmplitude * sin(timeSinceRelease * uReleaseDistortion);
           }
 
           vec3 stretch = (uDragTarget - uDragStart) * distortion;
@@ -181,7 +198,7 @@ export default class ThreeJsDraft {
           vec3 newPosition = position;
 
           newPosition += stretch;
-          newPosition.z += distanceToStart * distortion;
+          newPosition.z += distanceToStart * uZDistanceFactor * distortion;
 
           gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.);
 
@@ -214,6 +231,18 @@ export default class ThreeJsDraft {
 
     this.stats = Stats()
     document.body.appendChild(this.stats.dom)
+
+    const gui = new GUI()
+    const cubeFolder = gui.addFolder('Cube')
+    cubeFolder.add(this.cubeMaterial.uniforms.uInfluence, 'value', 0, 1).name('Influence');
+    cubeFolder.add(this.cubeMaterial.uniforms.uZDistanceFactor, 'value', 0, 5).name('Z-Distance Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseAmplitude, 'value', 0, 3).name('Release Amplitude');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortion, 'value', 0, 100).name('Release Distortion');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortionFactor, 'value', 1, 5).name('Release Distortion Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseExpFactor, 'value', -10, 0).name('Release Exp Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionFactor, 'value', 0, 3).name('Distortion Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionExpFactor, 'value', -10, 0).name('Distortion Exp Factor');
+    cubeFolder.open()
   }
 
   addObjects() {

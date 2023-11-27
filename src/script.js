@@ -1,11 +1,9 @@
 import './style.css'
 import * as THREE from 'three'
 import Stats from 'three/examples/jsm/libs/stats.module'
-import { DragControls } from 'three/addons/controls/DragControls.js';
-import EffectComposer, {
-  RenderPass,
-  ShaderPass,
-} from '@johh/three-effectcomposer';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import textObject from '../assets/gltf/test2.gltf';
+import textObjectData from '../assets/gltf/test2_data.bin';
 
 export default class ThreeJsDraft {
   constructor() {
@@ -15,7 +13,8 @@ export default class ThreeJsDraft {
     this.canvas = document.querySelector('canvas.webgl')
     this.width = window.innerWidth
     this.height = window.innerHeight
-    this.devicePixelRatio = window.devicePixelRatio
+    this.devicePixelRatio = window.devicePixelRatio;
+    this.time = 0;
 
     /**
      * Scene
@@ -26,7 +25,8 @@ export default class ThreeJsDraft {
      * Camera
      */
     this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 1000)
-    this.camera.position.z = 5
+    this.camera.position.z = 0.5
+    this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     /**
      * Renderer
@@ -36,6 +36,7 @@ export default class ThreeJsDraft {
     })
     this.renderer.setSize(this.width, this.height)
     this.renderer.setPixelRatio(Math.min(this.devicePixelRatio, 2))
+    this.renderer.setClearColor(0xfafaff);
 
     /**
      * Resize
@@ -50,6 +51,7 @@ export default class ThreeJsDraft {
 
       this.renderer.setSize(this.width, this.height)
       this.renderer.setPixelRatio(Math.min(this.devicePixelRatio, 2))
+
     }, false)
 
     /**
@@ -100,43 +102,110 @@ export default class ThreeJsDraft {
   }
 
   addEventListeners() {
-    const mouseMoveFunction = (e) => {
-      // mousemove / touchmove
-      this.uMouse.x = (e.clientX / window.innerWidth);
-      this.uMouse.y = 1. - (e.clientY / window.innerHeight);
-    }
-
-    this.uMouse = new THREE.Vector2(0, 0)
     this.raycaster = new THREE.Raycaster();
-    this.pointer = new THREE.Vector2();
+    this.touchTarget = null;
+    this.isDragging = false;
 
-    document.addEventListener('mousedown', (e) => {
-      this.pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      this.pointer.y = - (e.clientY / window.innerHeight) * 2 + 1;
+    this.touchTarget = new THREE.Mesh(
+      new THREE.PlaneGeometry(2000, 2000),
+      new THREE.MeshBasicMaterial()
+    );
 
-      this.raycaster.setFromCamera(this.pointer, this.camera);
-
-      const intersects = this.raycaster.intersectObjects([this.cube]);
-
-      console.log(intersects);
-
-      if (intersects.length) {
-
-        document.addEventListener('mousemove', mouseMoveFunction);
+    document.addEventListener('mousedown', (event) => {
+      const x = 2 * (event.clientX / this.width) - 1;
+      const y = -2 * (event.clientY / this.height) + 1;
+      this.raycaster.setFromCamera({ x, y }, this.camera);
+      const intersect = this.raycaster.intersectObject(this.cube);
+      console.log(intersect);
+      if (intersect.length) {
+        this.isDragging = true;
+        this.cubeMaterial.uniforms.uDragRelease.value = false;
+        const startPosition = intersect[0].point;
+        this.cubeMaterial.uniforms.uDragStart.value.copy(startPosition);
+        this.cubeMaterial.uniforms.uDragTarget.value.copy(startPosition);
       }
-
-
     });
 
-    document.addEventListener('mouseup', (e) => {
-      document.removeEventListener('mousemove', mouseMoveFunction);
-      this.uMouse.x = 0;
-      this.uMouse.y = 0;
+    document.addEventListener('mousemove', (event) => {
+      if (!this.isDragging) return;
+      const x = 2 * (event.clientX / this.width) - 1;
+      const y = -2 * (event.clientY / this.height) + 1;
+      this.raycaster.setFromCamera({ x, y }, this.camera);
+      const intersect = this.raycaster.intersectObject(this.touchTarget);
+      if (intersect.length) {
+        const target = intersect[0].point;
+        this.cubeMaterial.uniforms.uDragTarget.value.copy(target);
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      this.cubeMaterial.uniforms.uDragReleaseTime.value = this.time;
+      this.cubeMaterial.uniforms.uDragRelease.value = true;
     });
   }
 
   loadAssets() {
-    // const textureLoader = new THREE.TextureLoader(this.loadingManager)
+    this.cubeMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uDragStart: { value: new THREE.Vector3() },
+        uDragTarget: { value: new THREE.Vector3() },
+        uDragRelease: { value: 0 },
+        uDragReleaseTime: { value: 0 },
+        uTime: { value: 0 }
+      },
+      vertexShader: `
+      uniform vec3 uDragStart;
+      uniform vec3 uDragTarget;
+      uniform float uDragRelease;
+      uniform float uDragReleaseTime;
+      uniform float uTime;
+
+      varying float vDistortion;
+      
+      void main() {
+          float startToTarget = distance(uDragTarget, uDragStart);
+          float distanceToStart = distance(position, uDragStart);
+          float influence = distanceToStart / (0. + 0.3 * startToTarget);
+          float distortion = exp(influence * -3.2);
+
+          if (uDragRelease > 0.) {
+            float timeSinceRelease = uTime - uDragReleaseTime;
+            distortion *= exp(-3. * timeSinceRelease);
+            distortion *= 0.5 * sin(timeSinceRelease * 30.);
+          }
+
+          vec3 stretch = (uDragTarget - uDragStart) * distortion;
+
+          vec3 newPosition = position;
+
+          newPosition += stretch;
+          newPosition.z += distanceToStart * distortion;
+
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.);
+
+          vDistortion = distortion;
+      }
+      `,
+      fragmentShader: `
+      varying float vDistortion;
+
+      void main() {
+        gl_FragColor = vec4(vDistortion, 0., 0., 1.);
+      }
+      `
+    });
+
+    const gltfLoader = new GLTFLoader(this.loadingManager);
+
+    gltfLoader.load(textObject, (gltf) => {
+      this.scene.add(gltf.scene);
+
+      gltf.scene.children[0].material = this.cubeMaterial;
+
+      this.cube = gltf.scene;
+    });
   }
 
   addHelpers() {
@@ -148,59 +217,14 @@ export default class ThreeJsDraft {
   }
 
   addObjects() {
-    const cubeGeometry = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16)
-    const cubeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
-      wireframe: true
-    })
-    this.cube = new THREE.Mesh(cubeGeometry, cubeMaterial)
-    this.scene.add(this.cube)
 
-    this.composer = new EffectComposer(this.renderer);
-    const renderPass = new RenderPass(this.scene, this.camera, cubeMaterial);
-    this.composer.addPass(renderPass);
-
-    var myEffect = {
-      uniforms: {
-        "tDiffuse": { value: null },
-        "resolution": { value: new THREE.Vector2(1., window.innerHeight / window.innerWidth) },
-        "uMouse": { value: new THREE.Vector2(-10, -10) },
-        "uVelo": { value: 0 },
-      },
-      vertexShader: `varying vec2 vUv;void main() {vUv = uv;gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0 );}`,
-      fragmentShader: `uniform float time;
-  uniform sampler2D tDiffuse;
-  uniform vec2 resolution;
-  varying vec2 vUv;
-  uniform vec2 uMouse;
-  float circle(vec2 uv, vec2 disc_center, float disc_radius, float border_size) {
-    uv -= disc_center;
-    uv*=resolution;
-    float dist = sqrt(dot(uv, uv));
-    return smoothstep(disc_radius+border_size, disc_radius-border_size, dist);
-  }
-  void main()  {
-    vec2 newUV = vUv;
-    float c = circle(vUv, uMouse, 0.0, 0.2);
-    float r = texture2D(tDiffuse, newUV.xy += c * (0.1 * .5)).x;
-    float g = texture2D(tDiffuse, newUV.xy += c * (0.1 * .525)).y;
-    float b = texture2D(tDiffuse, newUV.xy += c * (0.1 * .55)).z;
-    vec4 color = vec4(r, g, b, 1.);
-    
-    gl_FragColor = color;
-  }`
-    }
-
-    this.customPass = new ShaderPass(myEffect);
-    this.customPass.renderToScreen = true;
-    this.composer.addPass(this.customPass);
   }
 
   animate() {
-    this.customPass.uniforms.uMouse.value = this.uMouse;
-    this.stats.update()
-    this.composer.render()
-    //this.renderer.render(this.scene, this.camera);
+    this.stats.update();
+    this.time += 0.01633;
+    this.cubeMaterial.uniforms.uTime.value = this.time;
+    this.renderer.render(this.scene, this.camera);
     window.requestAnimationFrame(this.animate.bind(this))
   }
 }

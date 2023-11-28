@@ -2,8 +2,8 @@ import './style.css'
 import * as THREE from 'three'
 import Stats from 'three/examples/jsm/libs/stats.module'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import textObject from '../assets/gltf/test2.gltf';
-import textObjectData from '../assets/gltf/test2_data.bin';
+import textObject from '../assets/gltf/test.gltf';
+import textObjectData from '../assets/gltf/test_data.bin';
 import { GUI } from 'dat.gui'
 
 export default class ThreeJsDraft {
@@ -26,7 +26,7 @@ export default class ThreeJsDraft {
      * Camera
      */
     this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 1000)
-    this.camera.position.z = 0.5
+    this.camera.position.z = 1
     this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     /**
@@ -92,6 +92,11 @@ export default class ThreeJsDraft {
     this.addObjects()
 
     /**
+     * Lights
+     */
+    this.addLights()
+
+    /**
      * Event Listeners
      */
     this.addEventListeners();
@@ -117,7 +122,6 @@ export default class ThreeJsDraft {
       const y = -2 * (event.clientY / this.height) + 1;
       this.raycaster.setFromCamera({ x, y }, this.camera);
       const intersect = this.raycaster.intersectObject(this.cube);
-      console.log(intersect);
       if (intersect.length) {
         this.isDragging = true;
         this.cubeMaterial.uniforms.uDragRelease.value = false;
@@ -234,19 +238,28 @@ export default class ThreeJsDraft {
 
     const gui = new GUI()
     const cubeFolder = gui.addFolder('Cube')
+
+    console.log(this.cubeMaterial);
+
     cubeFolder.add(this.cubeMaterial.uniforms.uInfluence, 'value', 0, 1).name('Influence');
-    cubeFolder.add(this.cubeMaterial.uniforms.uZDistanceFactor, 'value', 0, 5).name('Z-Distance Factor');
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseAmplitude, 'value', 0, 3).name('Release Amplitude');
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortion, 'value', 0, 100).name('Release Distortion');
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortionFactor, 'value', 1, 5).name('Release Distortion Factor');
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseExpFactor, 'value', -10, 0).name('Release Exp Factor');
-    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionFactor, 'value', 0, 3).name('Distortion Factor');
-    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionExpFactor, 'value', -10, 0).name('Distortion Exp Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uZDistanceFactor, 'value', 0, 5).name('Z-Distance_Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseAmplitude, 'value', 0, 3).name('Release_Amplitude');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortion, 'value', 0, 100).name('Release_Distortion');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortionFactor, 'value', 1, 5).name('Release_Distortion_Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseExpFactor, 'value', -10, 0).name('Release_Exp_Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionFactor, 'value', 0, 3).name('Distortion_Factor');
+    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionExpFactor, 'value', -10, 0).name('Distortion_Exp_Factor');
     cubeFolder.open()
   }
 
   addObjects() {
 
+  }
+
+  addLights() {
+    const light = new THREE.PointLight(0xfffa00, 1, 100);
+    light.position.set(5, 5, 5);
+    this.scene.add(light);
   }
 
   animate() {

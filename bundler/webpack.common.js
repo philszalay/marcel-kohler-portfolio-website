@@ -4,6 +4,12 @@ const path = require('path')
 
 module.exports = (env, argv) => {
   return {
+    resolve: {
+      fallback: {
+        fs: false,
+        path: false // ammo.js seems to also use path
+      }
+    },
     entry: path.resolve(__dirname, '../src/script.js'),
     output:
     {

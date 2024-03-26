@@ -3,10 +3,10 @@ import * as THREE from 'three'
 import Stats from 'three/examples/jsm/libs/stats.module'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import textObject from '../assets/gltf/test.gltf'
+// eslint-disable-next-line no-unused-vars
 import textObjectData from '../assets/gltf/test_data.bin'
 import hdri from '../assets/hdri/main.hdr'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
-import { GUI } from 'dat.gui'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 export default class ThreeJsDraft {
@@ -19,7 +19,6 @@ export default class ThreeJsDraft {
     this.height = window.innerHeight
     this.devicePixelRatio = window.devicePixelRatio
     this.time = 0
-    this.dragZValue = 0
 
     /**
      * Scene
@@ -31,7 +30,6 @@ export default class ThreeJsDraft {
      */
     this.camera = new THREE.PerspectiveCamera(75, this.width / this.height, 0.1, 1000)
     this.camera.position.z = 1
-    this.camera.lookAt(new THREE.Vector3(0, 0, 0))
 
     /**
      * Renderer
@@ -119,47 +117,16 @@ export default class ThreeJsDraft {
 
   addEventListeners () {
     this.raycaster = new THREE.Raycaster()
-    this.touchTarget = null
-    this.isDragging = false
 
-    this.touchTarget = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000),
-      new THREE.MeshBasicMaterial()
-    )
-
-    document.addEventListener('mousedown', (event) => {
+    document.addEventListener('click', (event) => {
       const x = 2 * (event.clientX / this.width) - 1
       const y = -2 * (event.clientY / this.height) + 1
       this.raycaster.setFromCamera({ x, y }, this.camera)
       const intersect = this.raycaster.intersectObject(this.cube)
       if (intersect.length) {
-        this.isDragging = true
-        this.cubeMaterial.uniforms.uDragRelease.value = false
         const startPosition = intersect[0].point
-        this.cubeMaterial.uniforms.uDragStart.value.copy(startPosition)
-        startPosition.z += this.dragZValue
         this.cubeMaterial.uniforms.uDragTarget.value.copy(startPosition)
       }
-    })
-
-    document.addEventListener('mousemove', (event) => {
-      if (!this.isDragging) return
-      const x = 2 * (event.clientX / this.width) - 1
-      const y = -2 * (event.clientY / this.height) + 1
-      this.raycaster.setFromCamera({ x, y }, this.camera)
-      const intersect = this.raycaster.intersectObject(this.touchTarget)
-      if (intersect.length) {
-        const target = intersect[0].point
-        target.z = this.dragZValue
-        this.cubeMaterial.uniforms.uDragTarget.value.copy(target)
-      }
-    })
-
-    document.addEventListener('mouseup', () => {
-      if (!this.isDragging) return
-      this.isDragging = false
-      this.cubeMaterial.uniforms.uDragReleaseTime.value = this.time
-      this.cubeMaterial.uniforms.uDragRelease.value = true
     })
   }
 
@@ -168,34 +135,12 @@ export default class ThreeJsDraft {
 
     this.cubeMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uDragStart: { value: new THREE.Vector3() },
         uDragTarget: { value: new THREE.Vector3() },
-        uDragRelease: { value: 0 },
-        uDragReleaseTime: { value: 0 },
-        uTime: { value: 0 },
-        uInfluence: { value: 0.4 },
-        uReleaseAmplitude: { value: 0.6 },
-        uReleaseDistortion: { value: 26 },
-        uZDistanceFactor: { value: 5 },
-        uReleaseDistortionFactor: { value: 2 },
-        uReleaseExpFactor: { value: -7 },
-        uDistortionFactor: { value: 0.5 },
-        uDistortionExpFactor: { value: -2.2 }
+        uTime: { value: 0 }
       },
       vertexShader: `
-      uniform vec3 uDragStart;
       uniform vec3 uDragTarget;
-      uniform float uDragRelease;
-      uniform float uDragReleaseTime;
       uniform float uTime;
-      uniform float uInfluence;
-      uniform float uReleaseAmplitude;
-      uniform float uReleaseDistortion;
-      uniform float uZDistanceFactor;
-      uniform float uReleaseDistortionFactor;
-      uniform float uReleaseExpFactor;
-      uniform float uDistortionFactor;
-      uniform float uDistortionExpFactor;
 
       varying float vDistortion;
 
@@ -247,28 +192,10 @@ export default class ThreeJsDraft {
         #include <shadowmap_vertex>
         #include <fog_vertex>
 
-        float startToTarget = distance(uDragTarget, uDragStart);
-        float distanceToStart = distance(position, uDragStart);
-        float influence = distanceToStart / (uInfluence * startToTarget);
-        float distortion = uDistortionFactor * exp(influence * uDistortionExpFactor);
-
-        if (uDragRelease > 0.) {
-          float timeSinceRelease = uTime - uDragReleaseTime;
-          distortion *= uReleaseDistortionFactor * exp(uReleaseExpFactor * timeSinceRelease);
-          distortion *= uReleaseAmplitude * sin(timeSinceRelease * uReleaseDistortion);
-        }
-
-        vec3 stretch = (uDragTarget - uDragStart) * distortion;
-
         vec3 newPosition = position;
-
-        newPosition += stretch;
-        newPosition.z += distanceToStart * uZDistanceFactor * distortion;
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.);
 
-        vDistortion = distortion;
-      
       #ifdef USE_TRANSMISSION
       
         vWorldPosition = worldPosition.xyz;
@@ -312,26 +239,8 @@ export default class ThreeJsDraft {
   }
 
   addHelpers () {
-    const axisHelper = new THREE.AxesHelper(3)
-    // this.scene.add(axisHelper)
-
     this.stats = Stats()
     document.body.appendChild(this.stats.dom)
-
-    const gui = new GUI()
-    const cubeFolder = gui.addFolder('Cube')
-
-    cubeFolder.add(this.cubeMaterial.uniforms.uInfluence, 'value', 0, 1).name('Influence')
-    cubeFolder.add(this, 'dragZValue', 0, 1, 0.1).name('Drag_Z_Value')
-    cubeFolder.add(this.cubeMaterial.uniforms.uZDistanceFactor, 'value', 0, 20).name('Z_Distance_Factor')
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseAmplitude, 'value', 0, 3).name('Release_Amplitude')
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortion, 'value', 0, 100).name('Release_Distortion')
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseDistortionFactor, 'value', 1, 5).name('Release_Distortion_Factor')
-    cubeFolder.add(this.cubeMaterial.uniforms.uReleaseExpFactor, 'value', -10, 0).name('Release_Exp_Factor')
-    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionFactor, 'value', 0, 3).name('Distortion_Factor')
-    cubeFolder.add(this.cubeMaterial.uniforms.uDistortionExpFactor, 'value', -10, 0).name('Distortion_Exp_Factor')
-    cubeFolder.add(this.orbitControls, 'enabled', 0, 1, 1).name('Orbit_Controls')
-    cubeFolder.open()
   }
 
   addObjects () {
@@ -350,7 +259,6 @@ export default class ThreeJsDraft {
   animate () {
     this.stats.update()
     this.time += 0.01633
-    this.cubeMaterial.uniforms.uTime.value = this.time
     this.renderer.render(this.scene, this.camera)
     window.requestAnimationFrame(this.animate.bind(this))
   }

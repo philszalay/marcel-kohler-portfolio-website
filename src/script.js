@@ -6,6 +6,7 @@ import textObject from '../assets/gltf/test.gltf'
 // eslint-disable-next-line no-unused-vars
 import textObjectData from '../assets/gltf/test_data.bin'
 import hdri from '../assets/hdri/main.hdr'
+import { GUI } from 'dat.gui'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
@@ -18,7 +19,8 @@ export default class ThreeJsDraft {
     this.width = window.innerWidth
     this.height = window.innerHeight
     this.devicePixelRatio = window.devicePixelRatio
-    this.time = 0
+
+    this.timeSpeed = { value: 0.01 }
 
     /**
      * Scene
@@ -125,7 +127,8 @@ export default class ThreeJsDraft {
       const intersect = this.raycaster.intersectObject(this.cube)
       if (intersect.length) {
         const startPosition = intersect[0].point
-        this.cubeMaterial.uniforms.uDragTarget.value.copy(startPosition)
+        this.cubeMaterial.uniforms.uClickPosition.value.copy(startPosition)
+        this.cubeMaterial.uniforms.uTime.value = 0
       }
     })
   }
@@ -135,14 +138,22 @@ export default class ThreeJsDraft {
 
     this.cubeMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uDragTarget: { value: new THREE.Vector3() },
-        uTime: { value: 0 }
+        uClickPosition: { value: new THREE.Vector3() },
+        uTime: { value: 0 },
+        uAmplitude: { value: 0.01 },
+        uRange: { value: 5 },
+        uWaveSize: { value: 30 },
+        uDecayFactor: { value: 1 },
+        uWaveFactor: { value: 0.5 }
       },
       vertexShader: `
-      uniform vec3 uDragTarget;
+      uniform vec3 uClickPosition;
       uniform float uTime;
-
-      varying float vDistortion;
+      uniform float uAmplitude;
+      uniform float uRange;
+      uniform float uWaveSize;
+      uniform float uDecayFactor;
+      uniform float uWaveFactor;
 
       #define STANDARD
 
@@ -194,9 +205,19 @@ export default class ThreeJsDraft {
 
         vec3 newPosition = position;
 
+        if (uClickPosition.x != 0.) {
+          float distance = distance(position, uClickPosition);
+
+          float rippleEffect = -uAmplitude * exp(uRange * - distance) * cos(uWaveSize * (distance - uTime));
+
+          float totalRippleEffect = exp(-uTime + uDecayFactor) * cos(uWaveFactor * uTime) * rippleEffect;
+
+          newPosition.z += totalRippleEffect;
+        }
+
         gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.);
 
-      #ifdef USE_TRANSMISSION
+        #ifdef USE_TRANSMISSION
       
         vWorldPosition = worldPosition.xyz;
       
@@ -241,6 +262,17 @@ export default class ThreeJsDraft {
   addHelpers () {
     this.stats = Stats()
     document.body.appendChild(this.stats.dom)
+
+    const gui = new GUI()
+    const cubeFolder = gui.addFolder('Cube')
+
+    cubeFolder.add(this.timeSpeed, 'value', 0, 0.03).name('Speed')
+    cubeFolder.add(this.cubeMaterial.uniforms.uAmplitude, 'value', 0, 0.05).name('Amplitude')
+    cubeFolder.add(this.cubeMaterial.uniforms.uRange, 'value', 1, 10).name('Range')
+    cubeFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 60).name('Wave Size')
+    cubeFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 3).name('Decay Factor')
+    cubeFolder.add(this.cubeMaterial.uniforms.uWaveFactor, 'value', 0.1, 1).name('Wave Factor')
+    cubeFolder.open()
   }
 
   addObjects () {
@@ -258,7 +290,7 @@ export default class ThreeJsDraft {
 
   animate () {
     this.stats.update()
-    this.time += 0.01633
+    this.cubeMaterial.uniforms.uTime.value += this.timeSpeed.value
     this.renderer.render(this.scene, this.camera)
     window.requestAnimationFrame(this.animate.bind(this))
   }

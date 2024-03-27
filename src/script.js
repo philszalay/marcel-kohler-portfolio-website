@@ -21,6 +21,8 @@ export default class ThreeJsDraft {
     this.devicePixelRatio = window.devicePixelRatio
 
     this.timeSpeed = { value: 0.01 }
+    this.objectMaterialMetalness = { value: 0.5 }
+    this.objectMaterialRoughness = { value: 0.5 }
 
     /**
      * Scene
@@ -144,7 +146,8 @@ export default class ThreeJsDraft {
         uRange: { value: 5 },
         uWaveSize: { value: 30 },
         uDecayFactor: { value: 1 },
-        uWaveFactor: { value: 0.5 }
+        uWaveFactor: { value: 0.5 },
+        uNewNormalTangentFactor: { value: 0.01 }
       },
       vertexShader: `
       uniform vec3 uClickPosition;
@@ -154,6 +157,7 @@ export default class ThreeJsDraft {
       uniform float uWaveSize;
       uniform float uDecayFactor;
       uniform float uWaveFactor;
+      uniform float uNewNormalTangentFactor;
 
       #define STANDARD
 
@@ -176,7 +180,37 @@ export default class ThreeJsDraft {
       #include <shadowmap_pars_vertex>
       #include <logdepthbuf_pars_vertex>
       #include <clipping_planes_pars_vertex>
+
+      vec3 ripple(vec3 position) {
+        float distance = distance(position, uClickPosition);
+
+        float rippleEffect = -uAmplitude * exp(uRange * - distance) * cos(uWaveSize * (distance - uTime));
+
+        float totalRippleEffect = exp(-uTime + uDecayFactor) * cos(uWaveFactor * uTime) * rippleEffect;
+
+        position.z += totalRippleEffect;
+
+        return position;
+      }
+
+      vec3 orthogonal(vec3 v) {
+        return normalize(abs(v.x) > abs(v.z) ? vec3(-v.y, v.x, 0.0)
+        : vec3(0.0, -v.z, v.y));
+      }
       
+      vec3 calculateNewNormal(vec3 oldPosition, vec3 newPosition, vec3 oldNormal) {
+        float tangentFactor = uNewNormalTangentFactor;
+
+        vec3 tangent1 = orthogonal(oldNormal);
+        vec3 tangent2 = normalize(cross(oldNormal, tangent1));
+        vec3 nearby1 = oldPosition + tangent1 * tangentFactor;
+        vec3 nearby2 = oldPosition + tangent2 * tangentFactor;
+        vec3 distorted1 = ripple(nearby1);
+        vec3 distorted2 = ripple(nearby2);
+
+        return cross(distorted1 - newPosition, distorted2 - newPosition);
+      }
+
       void main() {
         #include <uv_vertex>
         #include <color_vertex>
@@ -186,9 +220,30 @@ export default class ThreeJsDraft {
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
         #include <skinnormal_vertex>
-        #include <defaultnormal_vertex>
-        #include <normal_vertex>
+
+        // position calculation and normals
+        vec3 oldPosition = position;
+        vec3 newPosition = position;
+        vec3 transformedNormal = objectNormal;
+
+        if (uClickPosition.x != 0.) {
+          newPosition = ripple(oldPosition);
+          transformedNormal = calculateNewNormal(oldPosition, newPosition, objectNormal);
+        }
+        
+        #ifndef FLAT_SHADED // normal is computed with derivatives when FLAT_SHADED
+
+        vNormal = normalize( transformedNormal );
       
+        #ifdef USE_TANGENT
+      
+          vTangent = normalize( transformedTangent );
+          vBitangent = normalize( cross( vNormal, vTangent ) * tangent.w );
+      
+        #endif
+      
+      #endif
+
         #include <begin_vertex>
         #include <morphtarget_vertex>
         #include <skinning_vertex>
@@ -196,25 +251,13 @@ export default class ThreeJsDraft {
         #include <project_vertex>
         #include <logdepthbuf_vertex>
         #include <clipping_planes_vertex>
-      
+        
         vViewPosition = - mvPosition.xyz;
-      
+        
         #include <worldpos_vertex>
         #include <shadowmap_vertex>
         #include <fog_vertex>
-
-        vec3 newPosition = position;
-
-        if (uClickPosition.x != 0.) {
-          float distance = distance(position, uClickPosition);
-
-          float rippleEffect = -uAmplitude * exp(uRange * - distance) * cos(uWaveSize * (distance - uTime));
-
-          float totalRippleEffect = exp(-uTime + uDecayFactor) * cos(uWaveFactor * uTime) * rippleEffect;
-
-          newPosition.z += totalRippleEffect;
-        }
-
+        
         gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.);
 
         #ifdef USE_TRANSMISSION
@@ -251,10 +294,13 @@ export default class ThreeJsDraft {
           shader.vertexShader = this.cubeMaterial.vertexShader
         }
 
-        // mainObjectMaterial.metalness = 1;
-        // mainObjectMaterial.roughness = 0.2;
+        mainObjectMaterial.metalness = this.objectMaterialMetalness.value
+        mainObjectMaterial.roughness = this.objectMaterialRoughness.value
 
         this.cube = gltf.scene
+        // this.cube.rotation.y = 2
+
+        console.log(this.cube)
       })
     })
   }
@@ -264,15 +310,27 @@ export default class ThreeJsDraft {
     document.body.appendChild(this.stats.dom)
 
     const gui = new GUI()
-    const cubeFolder = gui.addFolder('Cube')
+    const waveFolder = gui.addFolder('Wave')
+    const objectFolder = gui.addFolder('Object')
+    const lightFolder = gui.addFolder('Light')
 
-    cubeFolder.add(this.timeSpeed, 'value', 0, 0.03).name('Speed')
-    cubeFolder.add(this.cubeMaterial.uniforms.uAmplitude, 'value', 0, 0.05).name('Amplitude')
-    cubeFolder.add(this.cubeMaterial.uniforms.uRange, 'value', 1, 10).name('Range')
-    cubeFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 60).name('Wave Size')
-    cubeFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 3).name('Decay Factor')
-    cubeFolder.add(this.cubeMaterial.uniforms.uWaveFactor, 'value', 0.1, 1).name('Wave Factor')
-    cubeFolder.open()
+    waveFolder.add(this.timeSpeed, 'value', 0, 0.03).name('Speed')
+    waveFolder.add(this.cubeMaterial.uniforms.uAmplitude, 'value', 0, 0.05).name('Amplitude')
+    waveFolder.add(this.cubeMaterial.uniforms.uRange, 'value', 1, 10).name('Range')
+    waveFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 60).name('Wave Size')
+    waveFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 3).name('Decay Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uWaveFactor, 'value', 0.1, 1).name('Wave Factor')
+    lightFolder.add(this.cubeMaterial.uniforms.uNewNormalTangentFactor, 'value', 0.0001, 0.5).name('New Normal Tangent Factor')
+    objectFolder.add(this.objectMaterialMetalness, 'value', 0, 1).name('Metalness').onChange(() => {
+      this.cube.children[0].material.metalness = this.objectMaterialMetalness.value
+    })
+    objectFolder.add(this.objectMaterialRoughness, 'value', 0, 1).name('Roughness').onChange(() => {
+      this.cube.children[0].material.roughness = this.objectMaterialRoughness.value
+    })
+
+    waveFolder.open()
+    objectFolder.open()
+    lightFolder.open()
   }
 
   addObjects () {
@@ -280,12 +338,6 @@ export default class ThreeJsDraft {
   }
 
   addLights () {
-    const light = new THREE.PointLight(0xfafaff, 1, 100)
-    light.position.set(0, 0, 5)
-    light.position.set(1, 0, 15)
-    light.position.set(0, 4, -5)
-    light.position.set(-4, 1, -15)
-    this.scene.add(light)
   }
 
   animate () {

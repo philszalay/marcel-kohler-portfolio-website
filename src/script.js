@@ -24,6 +24,8 @@ export default class ThreeJsDraft {
     this.objectMaterialMetalness = { value: 0.5 }
     this.objectMaterialRoughness = { value: 0.5 }
 
+    this.MAX_CLICK_POSITIONS = 3
+
     /**
      * Scene
      */
@@ -129,8 +131,8 @@ export default class ThreeJsDraft {
       const intersect = this.raycaster.intersectObject(this.cube)
       if (intersect.length) {
         const startPosition = intersect[0].point
-        this.cubeMaterial.uniforms.uClickPosition.value.copy(startPosition)
-        this.cubeMaterial.uniforms.uTime.value = 0
+        this.cubeMaterial.uniforms.uClickPositions.value.unshift(startPosition)
+        this.cubeMaterial.uniforms.uClickPositionTimes.value.unshift(0)
       }
     })
   }
@@ -140,8 +142,8 @@ export default class ThreeJsDraft {
 
     this.cubeMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        uClickPosition: { value: new THREE.Vector3() },
-        uTime: { value: 0 },
+        uClickPositions: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+        uClickPositionTimes: { value: [0, 0, 0] },
         uAmplitude: { value: 0.01 },
         uRange: { value: 2 },
         uWaveSize: { value: 30 },
@@ -153,8 +155,8 @@ export default class ThreeJsDraft {
         uRippleYFactor: { value: 0 }
       },
       vertexShader: `
-      uniform vec3 uClickPosition;
-      uniform float uTime;
+      uniform vec3 uClickPositions[3];
+      uniform float uClickPositionTimes[3];
       uniform float uAmplitude;
       uniform float uRange;
       uniform float uWaveSize;
@@ -187,18 +189,10 @@ export default class ThreeJsDraft {
       #include <logdepthbuf_pars_vertex>
       #include <clipping_planes_pars_vertex>
 
-      vec3 ripple(vec3 position) {
-        float distance = distance(position, uClickPosition);
-
-        float rippleEffect = -uAmplitude * exp(uRange * - distance) * cos(uWaveSize * (distance - uTime));
-
-        float totalRippleEffect = exp(-uTime + uDecayFactor) * cos(uWaveFactor * uTime) * rippleEffect;
-
-        position.z += totalRippleEffect * uRippleZFactor;
-        position.x += totalRippleEffect * uRippleXFactor;
-        position.y += totalRippleEffect * uRippleYFactor;
-
-        return position;
+      float calcRippleEffect(vec3 position, vec3 clickPosition, float clickPositionTime) {
+        float distance = distance(position, clickPosition);
+        float rippleEffect = -uAmplitude * exp(uRange * - distance) * cos(uWaveSize * (distance - clickPositionTime)) * exp(-clickPositionTime + uDecayFactor) * cos(uWaveFactor * clickPositionTime);
+        return rippleEffect;
       }
 
       vec3 orthogonal(vec3 v) {
@@ -206,15 +200,19 @@ export default class ThreeJsDraft {
         : vec3(0.0, -v.z, v.y));
       }
       
-      vec3 calculateNewNormal(vec3 oldPosition, vec3 newPosition, vec3 oldNormal) {
+      vec3 calculateNewNormal(vec3 oldPosition, vec3 newPosition, vec3 oldNormal, vec3 clickPosition, float clickPositionTime) {
         float tangentFactor = uNewNormalTangentFactor;
 
         vec3 tangent1 = orthogonal(oldNormal);
         vec3 tangent2 = normalize(cross(oldNormal, tangent1));
         vec3 nearby1 = oldPosition + tangent1 * tangentFactor;
         vec3 nearby2 = oldPosition + tangent2 * tangentFactor;
-        vec3 distorted1 = ripple(nearby1);
-        vec3 distorted2 = ripple(nearby2);
+
+        float rippleEffectNearby1 = calcRippleEffect(nearby1, clickPosition, clickPositionTime);
+        float rippleEffectNearby2 = calcRippleEffect(nearby2, clickPosition, clickPositionTime);
+
+        vec3 distorted1 = vec3(nearby1.x + rippleEffectNearby1 * uRippleXFactor, nearby1.y + rippleEffectNearby1 * uRippleYFactor, nearby1.z + rippleEffectNearby1 * uRippleZFactor);
+        vec3 distorted2 = vec3(nearby2.x + rippleEffectNearby2 * uRippleXFactor, nearby2.y + rippleEffectNearby2 * uRippleYFactor, nearby2.z + rippleEffectNearby2 * uRippleZFactor);
 
         return cross(distorted1 - newPosition, distorted2 - newPosition);
       }
@@ -230,15 +228,24 @@ export default class ThreeJsDraft {
         #include <skinnormal_vertex>
 
         // position calculation and normals
-        vec3 oldPosition = position;
-        vec3 newPosition = position;
         vec3 transformedNormal = objectNormal;
 
-        if (uClickPosition.x != 0.) {
-          newPosition = ripple(oldPosition);
-          transformedNormal = calculateNewNormal(oldPosition, newPosition, objectNormal);
+        vec3 totalRippleEffect = vec3(0.);
+
+        for (int i = 0; i < 3; i++) {
+          if (uClickPositions[i] != vec3(0.)) {
+            totalRippleEffect += calcRippleEffect(position, uClickPositions[i], uClickPositionTimes[i]);
+          }
         }
         
+        vec3 newPosition = vec3(position.x + totalRippleEffect.x * uRippleXFactor, position.y + totalRippleEffect.y * uRippleYFactor, position.z + totalRippleEffect.z * uRippleZFactor);
+
+        for (int i = 0; i < 3; i++) {
+          if (uClickPositions[i] != vec3(0.)) {
+            //transformedNormal += calculateNewNormal(position, newPosition, objectNormal, uClickPositions[i], uClickPositionTimes[i]);
+          }
+        }
+
         #ifndef FLAT_SHADED // normal is computed with derivatives when FLAT_SHADED
 
         vNormal = normalize( transformedNormal );
@@ -353,7 +360,7 @@ export default class ThreeJsDraft {
 
   animate () {
     this.stats.update()
-    this.cubeMaterial.uniforms.uTime.value += this.timeSpeed.value
+    this.cubeMaterial.uniforms.uClickPositionTimes.value = this.cubeMaterial.uniforms.uClickPositionTimes.value.map((time) => time + this.timeSpeed.value)
     this.renderer.render(this.scene, this.camera)
     window.requestAnimationFrame(this.animate.bind(this))
   }

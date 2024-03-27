@@ -143,11 +143,14 @@ export default class ThreeJsDraft {
         uClickPosition: { value: new THREE.Vector3() },
         uTime: { value: 0 },
         uAmplitude: { value: 0.01 },
-        uRange: { value: 5 },
+        uRange: { value: 2 },
         uWaveSize: { value: 30 },
         uDecayFactor: { value: 1 },
         uWaveFactor: { value: 0.5 },
-        uNewNormalTangentFactor: { value: 0.01 }
+        uNewNormalTangentFactor: { value: 0.01 },
+        uRippleZFactor: { value: 1 },
+        uRippleXFactor: { value: 0 },
+        uRippleYFactor: { value: 0 }
       },
       vertexShader: `
       uniform vec3 uClickPosition;
@@ -158,6 +161,9 @@ export default class ThreeJsDraft {
       uniform float uDecayFactor;
       uniform float uWaveFactor;
       uniform float uNewNormalTangentFactor;
+      uniform float uRippleZFactor;
+      uniform float uRippleXFactor;
+      uniform float uRippleYFactor;
 
       #define STANDARD
 
@@ -188,7 +194,9 @@ export default class ThreeJsDraft {
 
         float totalRippleEffect = exp(-uTime + uDecayFactor) * cos(uWaveFactor * uTime) * rippleEffect;
 
-        position.z += totalRippleEffect;
+        position.z += totalRippleEffect * uRippleZFactor;
+        position.x += totalRippleEffect * uRippleXFactor;
+        position.y += totalRippleEffect * uRippleYFactor;
 
         return position;
       }
@@ -320,7 +328,10 @@ export default class ThreeJsDraft {
     waveFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 60).name('Wave Size')
     waveFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 3).name('Decay Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uWaveFactor, 'value', 0.1, 1).name('Wave Factor')
-    lightFolder.add(this.cubeMaterial.uniforms.uNewNormalTangentFactor, 'value', 0.0001, 0.5).name('New Normal Tangent Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uRippleZFactor, 'value', -1, 1).name('Ripple Z Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uRippleXFactor, 'value', -1, 1).name('Ripple X Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uRippleYFactor, 'value', -1, 1).name('Ripple Y Factor')
+    lightFolder.add(this.cubeMaterial.uniforms.uNewNormalTangentFactor, 'value', 0.001, 0.5).name('New Normal Tangent Factor')
     objectFolder.add(this.objectMaterialMetalness, 'value', 0, 1).name('Metalness').onChange(() => {
       this.cube.children[0].material.metalness = this.objectMaterialMetalness.value
     })

@@ -21,7 +21,7 @@ export default class ThreeJsDraft {
     this.height = window.innerHeight
     this.devicePixelRatio = window.devicePixelRatio
 
-    this.timeSpeed = { value: 0.01 }
+    this.timeSpeed = { value: 0.005 }
     this.objectMaterialMetalness = { value: 0.5 }
     this.objectMaterialRoughness = { value: 0.5 }
 
@@ -125,7 +125,7 @@ export default class ThreeJsDraft {
   addEventListeners () {
     this.raycaster = new THREE.Raycaster()
 
-    document.addEventListener('click', (event) => {
+    document.addEventListener('mousedown', (event) => {
       const x = 2 * (event.clientX / this.width) - 1
       const y = -2 * (event.clientY / this.height) + 1
       this.raycaster.setFromCamera({ x, y }, this.camera)

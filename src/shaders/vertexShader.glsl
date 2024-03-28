@@ -4,7 +4,6 @@ uniform float uAmplitude;
 uniform float uRange;
 uniform float uWaveSize;
 uniform float uDecayFactor;
-uniform float uWaveFactor;
 uniform float uNewNormalTangentFactor;
 uniform float uRippleZFactor;
 uniform float uRippleXFactor;
@@ -32,7 +31,20 @@ varying vec3 vWorldPosition;
 
 float calcRippleEffect(vec3 position, vec3 clickPosition, float clickPositionTime) {
     float distance = distance(position, clickPosition);
-    float rippleEffect = -uAmplitude * exp(uRange * -distance) * cos(uWaveSize * (distance - clickPositionTime)) * exp(-clickPositionTime + uDecayFactor) * cos(uWaveFactor * clickPositionTime);
+
+    bool ready = clickPositionTime > distance / 2.;
+
+    if(!ready) {
+        return 0.;
+    }
+
+    bool finished = clickPositionTime > distance * 4.;
+
+    if(finished) {
+        return 0.;
+    }
+
+    float rippleEffect = -uAmplitude * exp(uRange * -distance) * cos(uWaveSize * (distance - clickPositionTime)) * exp(-clickPositionTime * uDecayFactor);
     return rippleEffect;
 }
 
@@ -77,6 +89,7 @@ void main() {
     vec3 newPositionNearby2 = vec3(nearby2.x + totalRippleEffectNearby2.x * uRippleXFactor, nearby2.y + totalRippleEffectNearby2.y * uRippleYFactor, nearby2.z + totalRippleEffectNearby2.z * uRippleZFactor);
 
     transformedNormal = normalize(cross(newPositionNearby1 - newPosition, newPositionNearby2 - newPosition));
+    //transformedNormal = objectNormal;
 
     #ifndef FLAT_SHADED // normal is computed with derivatives when FLAT_SHADED
     vNormal = normalize(transformedNormal);

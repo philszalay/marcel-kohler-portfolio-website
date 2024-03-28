@@ -21,9 +21,9 @@ export default class ThreeJsDraft {
     this.height = window.innerHeight
     this.devicePixelRatio = window.devicePixelRatio
 
-    this.timeSpeed = { value: 0.005 }
-    this.objectMaterialMetalness = { value: 0.5 }
-    this.objectMaterialRoughness = { value: 0.5 }
+    this.timeSpeed = { value: 0.004 }
+    this.objectMaterialMetalness = { value: 0.1 }
+    this.objectMaterialRoughness = { value: 0 }
 
     this.MAX_CLICK_POSITIONS = 3
 
@@ -145,11 +145,10 @@ export default class ThreeJsDraft {
       uniforms: {
         uClickPositions: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
         uClickPositionTimes: { value: [0, 0, 0] },
-        uAmplitude: { value: 0.01 },
-        uRange: { value: 2 },
-        uWaveSize: { value: 30 },
-        uDecayFactor: { value: 1 },
-        uWaveFactor: { value: 0.5 },
+        uAmplitude: { value: 0.037 },
+        uRange: { value: 9 },
+        uWaveSize: { value: 125 },
+        uDecayFactor: { value: 7.4 },
         uNewNormalTangentFactor: { value: 0.001 },
         uRippleZFactor: { value: 1 },
         uRippleXFactor: { value: 0 },
@@ -157,6 +156,8 @@ export default class ThreeJsDraft {
       },
       vertexShader
     })
+
+    console.log('Current function:', '-' + this.cubeMaterial.uniforms.uAmplitude.value + ' * exp(' + this.cubeMaterial.uniforms.uRange.value + ' * (-x)) * cos(' + this.cubeMaterial.uniforms.uWaveSize.value + ' * (x - t)) * exp(-t + ' * this.cubeMaterial.uniforms.uDecayFactor.value)
 
     const gltfLoader = new GLTFLoader(this.loadingManager)
 
@@ -205,10 +206,9 @@ export default class ThreeJsDraft {
 
     waveFolder.add(this.timeSpeed, 'value', 0, 0.03).name('Speed')
     waveFolder.add(this.cubeMaterial.uniforms.uAmplitude, 'value', 0, 0.05).name('Amplitude')
-    waveFolder.add(this.cubeMaterial.uniforms.uRange, 'value', 1, 10).name('Range')
-    waveFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 60).name('Wave Size')
-    waveFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 3).name('Decay Factor')
-    waveFolder.add(this.cubeMaterial.uniforms.uWaveFactor, 'value', 0.1, 1).name('Wave Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uRange, 'value', 0.5, 10).name('Range')
+    waveFolder.add(this.cubeMaterial.uniforms.uWaveSize, 'value', 10, 150).name('Wave Size')
+    waveFolder.add(this.cubeMaterial.uniforms.uDecayFactor, 'value', 0.1, 10).name('Decay Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uRippleZFactor, 'value', -1, 1).name('Ripple Z Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uRippleXFactor, 'value', -1, 1).name('Ripple X Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uRippleYFactor, 'value', -1, 1).name('Ripple Y Factor')

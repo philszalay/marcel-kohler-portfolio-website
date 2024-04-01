@@ -8,6 +8,8 @@ uniform float uNewNormalTangentFactor;
 uniform float uRippleZFactor;
 uniform float uRippleXFactor;
 uniform float uRippleYFactor;
+uniform float uExpansionFactorStart;
+uniform float uExpansionFactorEnd;
 
 #define STANDARD
 
@@ -32,13 +34,13 @@ varying vec3 vWorldPosition;
 float calcRippleEffect(vec3 position, vec3 clickPosition, float clickPositionTime) {
     float distance = distance(position, clickPosition);
 
-    bool ready = clickPositionTime > distance / 2.;
+    bool ready = clickPositionTime > distance / uExpansionFactorStart;
 
     if(!ready) {
         return 0.;
     }
 
-    bool finished = clickPositionTime > distance * 4.;
+    bool finished = clickPositionTime > distance * uExpansionFactorEnd;
 
     if(finished) {
         return 0.;

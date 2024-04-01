@@ -152,7 +152,9 @@ export default class ThreeJsDraft {
         uNewNormalTangentFactor: { value: 0.001 },
         uRippleZFactor: { value: 1 },
         uRippleXFactor: { value: 0 },
-        uRippleYFactor: { value: 0 }
+        uRippleYFactor: { value: 0 },
+        uExpansionFactorStart: { value: 2 },
+        uExpansionFactorEnd: { value: 3.5 }
       },
       vertexShader
     })
@@ -212,6 +214,8 @@ export default class ThreeJsDraft {
     waveFolder.add(this.cubeMaterial.uniforms.uRippleZFactor, 'value', -1, 1).name('Ripple Z Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uRippleXFactor, 'value', -1, 1).name('Ripple X Factor')
     waveFolder.add(this.cubeMaterial.uniforms.uRippleYFactor, 'value', -1, 1).name('Ripple Y Factor')
+    waveFolder.add(this.cubeMaterial.uniforms.uExpansionFactorStart, 'value', 1, 10).name('Expansion Start')
+    waveFolder.add(this.cubeMaterial.uniforms.uExpansionFactorEnd, 'value', 1, 10).name('Expansion End')
     lightFolder.add(this.cubeMaterial.uniforms.uNewNormalTangentFactor, 'value', 0.0001, 0.01).name('New Normal Tangent Factor')
     objectFolder.add(this.objectMaterialMetalness, 'value', 0, 1).name('Metalness').onChange(() => {
       this.cube.children[0].material.metalness = this.objectMaterialMetalness.value

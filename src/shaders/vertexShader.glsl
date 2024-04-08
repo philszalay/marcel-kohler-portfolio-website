@@ -47,7 +47,7 @@ float calcRippleEffect(vec3 position, vec3 clickPosition, float clickPositionTim
     }
 
     //float frequencyFactor = (clickPositionTime - distance / 1.1) / clickPositionTime;
-    float frequencyFactor = 1;
+    float frequencyFactor = 1.;
 
     float rippleEffect = -uAmplitude * exp(uRange * -distance) * cos(frequencyFactor * uWaveSize * (distance - clickPositionTime)) * exp(-clickPositionTime * uDecayFactor);
     return rippleEffect;
